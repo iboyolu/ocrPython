@@ -10,6 +10,7 @@ This is a Python script that performs OCR on images copied to the clipboard. The
 - `pyperclip` library
 - pip install opencv-python
 - You need to install tesseract into your pc, you can find link in source
+- You can find to exe in source, using "pip install pyinstaller" for .py to .exe
 
 ## Installation
 
