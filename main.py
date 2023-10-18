@@ -1,23 +1,13 @@
 import datetime
 import os
 import time
+import numpy as np
 import pyperclip
 import re
-from PIL import Image, ImageEnhance, ImageGrab
+import cv2
+from PIL import Image, ImageEnhance, ImageGrab, ImageOps
 from pytesseract import pytesseract
 
-"""
-import sys
-import textwrap
-import autopep8
-import cv2
-import pyocr.builders
-import textract
-import kraken
-import kraken.lib
-import pandas
-from pyocr import pyocr
-"""
 timestamp = None
 global pics_dir_path
 pics_dir_path = None
@@ -33,32 +23,59 @@ print("Hello World!")
 
 
 def enhance_image(image):
-    """Enhances the image to improve OCR accuracy"""
-    """
-    Image.NEAREST: Nearest-neighbor resampling. This is the default and simplest resampling algorithm, which simply picks the closest pixel to the sampling point.
+    # Upscale
+    image = upscale_and_set_dpi(image, scale_factor=5.0, dpi=300)
 
-    Image.BOX: Box resampling. This method averages all the pixels in a block-shaped region around the sampling point to determine the new pixel value.
+    # Convert PIL Image to OpenCV format
+    img_cv = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+
+    # Convert to LAB color space
+    lab = cv2.cvtColor(img_cv, cv2.COLOR_BGR2Lab)
+
+    # Split LAB into L, A and B channels
+    l_channel, a_channel, b_channel = cv2.split(lab)
+
+    # Apply CLAHE to L channel
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    cl = clahe.apply(l_channel)
     
-    Image.BILINEAR: Bilinear resampling. This method calculates the new pixel value as a weighted average of the four closest pixels to the sampling point.
+    # Merge the CLAHE enhanced L channel with the original A and B channel
+    merged_channels = cv2.merge([cl, a_channel, b_channel])
+
+    # Convert back from LAB to BGR
+    enhanced_img_cv = cv2.cvtColor(merged_channels, cv2.COLOR_Lab2BGR)
+
+    # Convert back to PIL format
+    enhanced_image = Image.fromarray(cv2.cvtColor(enhanced_img_cv, cv2.COLOR_BGR2RGB))
     
-    Image.HAMMING: Hamming-windowed sinc interpolation. This method uses a Hamming window to reduce aliasing artifacts when performing sinc interpolation.
-    
-    Image.BICUBIC: Bicubic resampling. This method calculates the new pixel value as a weighted average of the 16 closest pixels to the sampling point.
-    
-    Image.LANCZOS: Lanczos-windowed sinc interpolation. This method uses a Lanczos window to reduce aliasing artifacts when performing sinc interpolation.
-    
-    """
-    enhancer = ImageEnhance.Color(image)
-    image = enhancer.enhance(-0.8)
-    enhancer = ImageEnhance.Contrast(image)
-    image = enhancer.enhance(1.5)
-    enhancer = ImageEnhance.Brightness(image)
-    image = enhancer.enhance(1.2)
-    enhancer = ImageEnhance.Sharpness(image)
-    image = enhancer.enhance(1.5)  
-    image = image.resize((image.size[0] * 2, image.size[1] * 2), resample=Image.BICUBIC)
-   
     return image
+
+def upscale_and_set_dpi(image, scale_factor=2.0, method='bicubic', dpi=300):
+    """Upscales the image using the specified method and sets the DPI"""
+    
+    # Convert PIL Image to OpenCV format
+    img_cv = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+    
+    new_width = int(img_cv.shape[1] * scale_factor)
+    new_height = int(img_cv.shape[0] * scale_factor)
+    dim = (new_width, new_height)
+
+    if method == 'bicubic':
+        upscaled_img_cv = cv2.resize(img_cv, dim, interpolation=cv2.INTER_CUBIC)
+    elif method == 'lanczos':
+        upscaled_img_cv = cv2.resize(img_cv, dim, interpolation=cv2.INTER_LANCZOS4)
+    else:
+        raise ValueError("Invalid upscaling method. Choose 'bicubic' or 'lanczos'.")
+
+    # Convert back to PIL format
+    upscaled_image = Image.fromarray(cv2.cvtColor(upscaled_img_cv, cv2.COLOR_BGR2RGB))
+    
+    # Set DPI
+    upscaled_image.info['dpi'] = (dpi, dpi)
+
+    return upscaled_image
+
+
 
 def save_image(image):
     """Saves the image to the 'pics' directory and returns the path"""
@@ -67,6 +84,7 @@ def save_image(image):
     image_path = os.path.join(pics_dir_path, f"{timestamp}_clipboard_image.png")
     image.save(image_path, "PNG")
     return image_path
+
 
 def save_text(text):
     """Saves the OCR output to a file and copies it to the clipboard"""
