@@ -4,7 +4,7 @@ import time
 import pyperclip
 import re
 from PIL import Image, ImageEnhance, ImageGrab
-from pytesseract import pytesseract 
+from pytesseract import pytesseract
 
 """
 import sys
